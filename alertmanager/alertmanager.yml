@@ -1,0 +1,45 @@
+global:
+  resolve_timeout: 5m
+  smtp_smarthost: smtp.example.com:587
+  smtp_from: alerts@example.com
+  smtp_auth_username: alerts@example.com
+  smtp_auth_password: REPLACE_WITH_SMTP_PASSWORD
+  smtp_require_tls: true
+route:
+  receiver: default
+  group_by: [alertname, job]
+  group_wait: 10s
+  group_interval: 30s
+  repeat_interval: 2h
+  routes:
+  - receiver: slack-critical
+    matchers:
+    - severity="critical"
+  - receiver: slack-warning
+    matchers:
+    - severity="warning"
+  - receiver: email-critical
+    matchers:
+    - severity="critical"
+receivers:
+- name: default
+- name: slack-critical
+  slack_configs:
+  - api_url: https://hooks.slack.com/services/REPLACE/CRITICAL/WEBHOOK
+    channel: '#data-platform-alerts'
+    send_resolved: true
+    title: '[CRITICAL] {{ .CommonLabels.alertname }}'
+    text: '{{ .CommonAnnotations.summary }}\n{{ .CommonAnnotations.description }}'
+- name: slack-warning
+  slack_configs:
+  - api_url: https://hooks.slack.com/services/REPLACE/WARNING/WEBHOOK
+    channel: '#data-platform-alerts'
+    send_resolved: true
+    title: '[WARNING] {{ .CommonLabels.alertname }}'
+    text: '{{ .CommonAnnotations.summary }}\n{{ .CommonAnnotations.description }}'
+- name: email-critical
+  email_configs:
+  - to: oncall@example.com
+    send_resolved: true
+    headers:
+      Subject: '[CRITICAL] {{ .CommonLabels.alertname }}'

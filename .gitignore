@@ -1,0 +1,32 @@
+# macOS
+.DS_Store
+
+# IDE/editor
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Logs and temp
+*.log
+*.tmp
+*.pid
+
+# Environment files
+.env
+.env.*
+!.env.example
+
+# Java / Maven build outputs
+**/target/
+**/.mvn/
+
+# Maven wrapper cache (if added later)
+.mvn/wrapper/maven-wrapper.jar
+
+# Docker/runtime local data
+prometheus_data/
+grafana_data/
+
+# Optional local overrides
+docker-compose.override.yml
