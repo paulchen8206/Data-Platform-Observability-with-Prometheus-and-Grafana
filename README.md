@@ -20,6 +20,38 @@ This project provides a simple data platform stack and monitoring setup using Do
 - cAdvisor
 - Node exporter
 
+## Architecture Component Diagram
+
+~~~mermaid
+flowchart LR
+  Producer[Java Producer Service]
+  Kafka[(Kafka)]
+  Spark[Spark Streaming Job]
+
+  subgraph Monitoring[Monitoring and Alerting]
+    Prometheus[(Prometheus)]
+    Alertmanager[(Alertmanager)]
+    Grafana[(Grafana)]
+  end
+
+  subgraph Exporters[Infrastructure and Runtime Exporters]
+    KExp[Kafka Exporter]
+    CAdvisor[cAdvisor]
+    NodeExp[Node Exporter]
+  end
+
+  Producer -->|publishes events| Kafka
+  Kafka -->|consumed stream| Spark
+
+  Kafka -->|broker metrics| KExp
+  KExp -->|scrape| Prometheus
+  CAdvisor -->|container metrics| Prometheus
+  NodeExp -->|host metrics| Prometheus
+
+  Prometheus -->|alerts| Alertmanager
+  Prometheus -->|query| Grafana
+~~~
+
 ## Project Structure
 
 ~~~text
