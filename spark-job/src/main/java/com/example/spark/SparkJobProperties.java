@@ -20,8 +20,6 @@ public class SparkJobProperties {
   @NotBlank
   private String kafkaTopic;
   @NotBlank
-  private String kafkaConsumerGroupId;
-  @NotBlank
   private String checkpointLocation;
 
   public String getSchemaRegistryUrl() {
@@ -56,14 +54,6 @@ public class SparkJobProperties {
     this.kafkaTopic = kafkaTopic;
   }
 
-  public String getKafkaConsumerGroupId() {
-    return kafkaConsumerGroupId;
-  }
-
-  public void setKafkaConsumerGroupId(String kafkaConsumerGroupId) {
-    this.kafkaConsumerGroupId = kafkaConsumerGroupId;
-  }
-
   public String getCheckpointLocation() {
     return checkpointLocation;
   }
@@ -85,9 +75,6 @@ public class SparkJobProperties {
     }
     if (!StringUtils.hasText(kafkaTopic)) {
       throw new IllegalStateException("Invalid config: app.spark-job.kafka-topic must not be blank");
-    }
-    if (!StringUtils.hasText(kafkaConsumerGroupId)) {
-      throw new IllegalStateException("Invalid config: app.spark-job.kafka-consumer-group-id must not be blank");
     }
     if (!StringUtils.hasText(checkpointLocation)) {
       throw new IllegalStateException("Invalid config: app.spark-job.checkpoint-location must not be blank");

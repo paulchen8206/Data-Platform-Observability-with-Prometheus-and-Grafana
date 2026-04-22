@@ -252,7 +252,7 @@ make kafka-topics
 make kafka-consumer-groups
 ~~~
 
-- Check lag series for alert filter topic/group:
+- Check lag series for alert filter topic:
 
 ~~~bash
 make check-kafka-alert-series
@@ -306,7 +306,7 @@ A result with `"value": [..., "1"]` confirms the exporter is scraping correctly.
 ## Notes
 
 - The producer sends one Avro-encoded event per second to the Kafka topic platform-events and auto-registers its schema in Schema Registry under `platform-events-value`.
-- The Spark Kafka consumer group is explicitly configured as `platform-events-spark-job`.
+- Spark Structured Streaming tracks offsets in checkpoint files under `spark-job/checkpoints/` rather than committing offsets as a regular Kafka consumer group, so a Spark group may not appear in Kafka UI.
 - The Spark job writes pass-through event records to the Iceberg table `lakehouse.platform.platform_events` in the MinIO bucket `platform-warehouse`.
 - Each output row is decoded from the registered Avro schema and enriched with `processed_at`, plus Kafka timestamp, partition, and offset metadata.
 - The Spark job stores Structured Streaming checkpoints under `spark-job/checkpoints/` so it can recover offsets and state across container restarts.
@@ -316,7 +316,7 @@ A result with `"value": [..., "1"]` confirms the exporter is scraping correctly.
 - Metrics are collected from exporters and available in Prometheus for Grafana dashboards.
 - Alert rules are defined in prometheus/alert_rules.yml and routed by Alertmanager.
 - Includes a Kafka alert `KafkaTopicNoEvents2m` that fires when topic `platform-events` has no new events for 2 minutes.
-- Includes a Kafka lag alert `KafkaConsumerLagHigh` scoped to topic `platform-events` and consumer group `platform-events-spark-job`.
+- Includes a Kafka lag alert `KafkaConsumerLagHigh` scoped to topic `platform-events`.
 - Includes a Loki log-based alert `SparkJobErrorOrExceptionLogs` that fires when spark-job logs contain `error` or `exception` in a 2 minute window.
 - Includes a stricter Loki alert `SparkJobStackTraceCritical` that fires for stack-trace patterns (`ERROR`, `Exception`, `Caused by:`) for 5+ minutes.
 - Loki and Promtail include ingestion/batching tuning to reduce transient 429 rate-limit drops.

@@ -1,6 +1,5 @@
 COMPOSE ?= docker compose
 TOPIC ?= platform-events
-CONSUMER_GROUP ?= platform-events-spark-job
 
 .PHONY: help up build up-core up-monitoring down down-v restart ps \
 	logs logs-producer logs-spark logs-promtail logs-prometheus logs-loki \
@@ -34,7 +33,7 @@ help:
 	@echo "  make rules-prometheus          Show Prometheus alert rules"
 	@echo "  make rules-loki                Show Loki ruler rules"
 	@echo "  make check-loki                Check Loki labels and broad docker stream"
-	@echo "  make check-kafka-alert-series  Check lag series for configured topic/group"
+	@echo "  make check-kafka-alert-series  Check lag series for configured topic"
 	@echo "  make kafka-topics              List Kafka topics"
 	@echo "  make kafka-consumer-groups     List Kafka consumer groups"
 	@echo ""
@@ -104,11 +103,10 @@ check-loki:
 	@echo
 
 check-kafka-alert-series:
-	@echo "=== Configured topic/group ==="
+	@echo "=== Configured topic ==="
 	@echo "TOPIC=$(TOPIC)"
-	@echo "CONSUMER_GROUP=$(CONSUMER_GROUP)"
-	@echo "=== Prometheus lag series for configured alert filter ==="
-	curl -sG http://localhost:9090/api/v1/series --data-urlencode 'match[]=kafka_consumergroup_lag{topic="$(TOPIC)",consumergroup="$(CONSUMER_GROUP)"}'
+	@echo "=== Prometheus lag series for configured topic ==="
+	curl -sG http://localhost:9090/api/v1/series --data-urlencode 'match[]=kafka_consumergroup_lag{topic="$(TOPIC)"}'
 	@echo
 
 health:
@@ -116,7 +114,7 @@ health:
 	$(COMPOSE) ps
 	@echo
 	@echo "=== Prometheus Kafka alert rules ==="
-	curl -s http://localhost:9090/api/v1/rules | grep -E 'KafkaTopicNoEvents2m|KafkaConsumerLagHigh|data-platform-alerts|platform-events|platform-events-spark-job' || true
+	curl -s http://localhost:9090/api/v1/rules | grep -E 'KafkaTopicNoEvents2m|KafkaConsumerLagHigh|data-platform-alerts|platform-events' || true
 	@echo
 	@echo "=== Loki service labels ==="
 	curl -sG http://localhost:3100/loki/api/v1/label/service/values

@@ -41,9 +41,6 @@ public class KafkaToIcebergStreamProcessor {
             .format("kafka")
             .option("kafka.bootstrap.servers", properties.getKafkaBootstrapServers())
             .option("subscribe", properties.getKafkaTopic())
-        .option("kafka.group.id", properties.getKafkaConsumerGroupId())
-        .option("kafka.enable.auto.commit", "true")
-        .option("kafka.auto.commit.interval.ms", "1000")
             .option("startingOffsets", "latest")
             .load();
 

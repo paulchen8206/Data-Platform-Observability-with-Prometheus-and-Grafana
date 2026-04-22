@@ -161,7 +161,6 @@ services:
     environment:
       SCHEMA_REGISTRY_URL: http://schema-registry:8081
       KAFKA_TOPIC: platform-events
-      KAFKA_CONSUMER_GROUP_ID: platform-events-spark-job
       KAFKA_VALUE_SUBJECT: platform-events-value
 
   iceberg-reader:
