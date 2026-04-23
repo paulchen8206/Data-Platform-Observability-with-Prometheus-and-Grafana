@@ -110,6 +110,15 @@ spec:
               value: "1"
             - name: KAFKA_AUTO_CREATE_TOPICS_ENABLE
               value: "false"
+            - name: KAFKA_HEAP_OPTS
+              value: "-Xmx512m -Xms256m"
+          resources:
+            requests:
+              memory: 512Mi
+              cpu: 200m
+            limits:
+              memory: 768Mi
+              cpu: 1000m
           ports:
             - containerPort: 9092
 ---
@@ -432,6 +441,13 @@ spec:
           volumeMounts:
             - name: spark-checkpoints
               mountPath: /opt/app/checkpoints
+          resources:
+            requests:
+              memory: 768Mi
+              cpu: 200m
+            limits:
+              memory: 1536Mi
+              cpu: 2000m
       volumes:
         - name: spark-checkpoints
           persistentVolumeClaim:
