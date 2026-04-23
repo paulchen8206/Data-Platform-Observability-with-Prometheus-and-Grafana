@@ -56,3 +56,17 @@ alertmanager:
       limits:
         cpu: 500m
         memory: 1Gi
+# Disable kube-system control plane scrape services for local Minikube.
+# This avoids creating service resources in kube-system from this app.
+kubeEtcd:
+  enabled: false
+kubeControllerManager:
+  enabled: false
+kubeScheduler:
+  enabled: false
+kubeProxy:
+  enabled: false
+coreDns:
+  enabled: false
+kubeDns:
+  enabled: false
