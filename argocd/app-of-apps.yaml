@@ -1,0 +1,20 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: data-platform-root
+  namespace: argocd
+spec:
+  project: data-platform
+  source:
+    repoURL: https://github.com/LOCAL/REPLACE-ME.git
+    targetRevision: HEAD
+    path: argocd/apps
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argocd
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true

@@ -1,0 +1,6 @@
+apiVersion: v2
+name: data-platform-core
+description: Core data platform workloads migrated from docker-compose to Kubernetes
+version: 0.1.0
+appVersion: "1.0.0"
+type: application

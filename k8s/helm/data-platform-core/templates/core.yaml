@@ -1,0 +1,529 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: minio-data
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: {{ .Values.persistence.minioSize }}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: spark-checkpoints
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: {{ .Values.persistence.sparkCheckpointsSize }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: zookeeper
+spec:
+  type: {{ .Values.service.type }}
+  selector:
+    app: zookeeper
+  ports:
+    - name: client
+      port: 2181
+      targetPort: 2181
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: zookeeper
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: zookeeper
+  template:
+    metadata:
+      labels:
+        app: zookeeper
+    spec:
+      containers:
+        - name: zookeeper
+          image: {{ .Values.images.zookeeper }}
+          imagePullPolicy: {{ .Values.imagePullPolicy }}
+          env:
+            - name: ZOOKEEPER_CLIENT_PORT
+              value: "2181"
+            - name: ZOOKEEPER_TICK_TIME
+              value: "2000"
+          ports:
+            - containerPort: 2181
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: kafka
+spec:
+  type: {{ .Values.service.type }}
+  selector:
+    app: kafka
+  ports:
+    - name: broker
+      port: 9092
+      targetPort: 9092
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kafka
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: kafka
+  template:
+    metadata:
+      labels:
+        app: kafka
+    spec:
+      enableServiceLinks: false
+      containers:
+        - name: kafka
+          image: {{ .Values.images.kafka }}
+          imagePullPolicy: {{ .Values.imagePullPolicy }}
+          env:
+            - name: KAFKA_BROKER_ID
+              value: "1"
+            - name: KAFKA_ZOOKEEPER_CONNECT
+              value: zookeeper:2181
+            - name: KAFKA_LISTENER_SECURITY_PROTOCOL_MAP
+              value: PLAINTEXT:PLAINTEXT
+            - name: KAFKA_LISTENERS
+              value: PLAINTEXT://0.0.0.0:9092
+            - name: KAFKA_ADVERTISED_LISTENERS
+              value: PLAINTEXT://kafka:9092
+            - name: KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR
+              value: "1"
+            - name: KAFKA_TRANSACTION_STATE_LOG_MIN_ISR
+              value: "1"
+            - name: KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR
+              value: "1"
+            - name: KAFKA_AUTO_CREATE_TOPICS_ENABLE
+              value: "false"
+          ports:
+            - containerPort: 9092
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: kafka-init
+spec:
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: kafka-init
+          image: {{ .Values.images.kafka }}
+          imagePullPolicy: {{ .Values.imagePullPolicy }}
+          command:
+            - /bin/bash
+            - -c
+            - |
+              cub kafka-ready -b kafka:9092 1 120 && \
+              kafka-topics --bootstrap-server kafka:9092 --create --if-not-exists \
+                --topic platform-events --partitions 3 --replication-factor 1
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: schema-registry
+spec:
+  type: {{ .Values.service.type }}
+  selector:
+    app: schema-registry
+  ports:
+    - name: http
+      port: 8081
+      targetPort: 8081
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: schema-registry
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: schema-registry
+  template:
+    metadata:
+      labels:
+        app: schema-registry
+    spec:
+      enableServiceLinks: false
+      containers:
+        - name: schema-registry
+          image: {{ .Values.images.schemaRegistry }}
+          imagePullPolicy: {{ .Values.imagePullPolicy }}
+          env:
+            - name: SCHEMA_REGISTRY_HOST_NAME
+              value: schema-registry
+            - name: SCHEMA_REGISTRY_LISTENERS
+              value: http://0.0.0.0:8081
+            - name: SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS
+              value: PLAINTEXT://kafka:9092
+          ports:
+            - containerPort: 8081
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: minio
+spec:
+  type: {{ .Values.service.type }}
+  selector:
+    app: minio
+  ports:
+    - name: api
+      port: 9000
+      targetPort: 9000
+    - name: console
+      port: 9001
+      targetPort: 9001
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: minio
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: minio
+  template:
+    metadata:
+      labels:
+        app: minio
+    spec:
+      containers:
+        - name: minio
+          image: {{ .Values.images.minio }}
+          imagePullPolicy: {{ .Values.imagePullPolicy }}
+          args:
+            - server
+            - /data
+            - --console-address
+            - :9001
+          env:
+            - name: MINIO_ROOT_USER
+              value: minioadmin
+            - name: MINIO_ROOT_PASSWORD
+              value: minioadmin
+          ports:
+            - containerPort: 9000
+            - containerPort: 9001
+          volumeMounts:
+            - name: minio-data
+              mountPath: /data
+      volumes:
+        - name: minio-data
+          persistentVolumeClaim:
+            claimName: minio-data
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: minio-init
+spec:
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: minio-init
+          image: {{ .Values.images.minioMc }}
+          imagePullPolicy: {{ .Values.imagePullPolicy }}
+          command:
+            - /bin/sh
+            - -c
+            - |
+              mc alias set local http://minio:9000 minioadmin minioadmin && \
+              mc mb --ignore-existing local/platform-warehouse
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: spark-master
+spec:
+  type: {{ .Values.service.type }}
+  selector:
+    app: spark-master
+  ports:
+    - name: spark
+      port: 7077
+      targetPort: 7077
+    - name: webui
+      port: 8080
+      targetPort: 8080
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: spark-master
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: spark-master
+  template:
+    metadata:
+      labels:
+        app: spark-master
+    spec:
+      enableServiceLinks: false
+      containers:
+        - name: spark-master
+          image: {{ .Values.images.sparkRuntime }}
+          imagePullPolicy: {{ .Values.imagePullPolicy }}
+          env:
+            - name: POD_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+          command:
+            - /bin/bash
+            - -lc
+            - >-
+              /opt/spark/bin/spark-class org.apache.spark.deploy.master.Master
+              --host ${POD_IP}
+              --port 7077
+              --webui-port 8080
+          ports:
+            - containerPort: 7077
+            - containerPort: 8080
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: spark-worker
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: spark-worker
+  template:
+    metadata:
+      labels:
+        app: spark-worker
+    spec:
+      containers:
+        - name: spark-worker
+          image: {{ .Values.images.sparkRuntime }}
+          imagePullPolicy: {{ .Values.imagePullPolicy }}
+          command:
+            - /opt/spark/bin/spark-class
+            - org.apache.spark.deploy.worker.Worker
+            - spark://spark-master:7077
+            - --cores
+            - "1"
+            - --memory
+            - 2g
+            - --webui-port
+            - "8081"
+          ports:
+            - containerPort: 8081
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: producer
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: producer
+  template:
+    metadata:
+      labels:
+        app: producer
+    spec:
+      containers:
+        - name: producer
+          image: {{ .Values.images.producer }}
+          imagePullPolicy: {{ .Values.imagePullPolicy }}
+          env:
+            - name: KAFKA_BOOTSTRAP_SERVERS
+              value: kafka:9092
+            - name: KAFKA_TOPIC
+              value: platform-events
+            - name: SCHEMA_REGISTRY_URL
+              value: http://schema-registry:8081
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: spark-job
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: spark-job
+  template:
+    metadata:
+      labels:
+        app: spark-job
+    spec:
+      containers:
+        - name: spark-job
+          image: {{ .Values.images.sparkJob }}
+          imagePullPolicy: {{ .Values.imagePullPolicy }}
+          ports:
+            - containerPort: 7078
+            - containerPort: 7079
+          command:
+            - /opt/spark/bin/spark-submit
+            - --master
+            - spark://spark-master:7077
+            - --conf
+            - spark.driver.host=spark-job
+            - --conf
+            - spark.driver.bindAddress=0.0.0.0
+            - --conf
+            - spark.driver.port=7078
+            - --conf
+            - spark.blockManager.port=7079
+            - --conf
+            - spark.executor.memory=768m
+            - --conf
+            - spark.executor.memoryOverhead=256m
+            - --conf
+            - spark.sql.extensions=org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions
+            - --conf
+            - spark.sql.catalog.lakehouse=org.apache.iceberg.spark.SparkCatalog
+            - --conf
+            - spark.sql.catalog.lakehouse.type=hadoop
+            - --conf
+            - spark.sql.catalog.lakehouse.warehouse=s3a://platform-warehouse/iceberg
+            - --conf
+            - spark.hadoop.fs.s3a.endpoint=http://minio:9000
+            - --conf
+            - spark.hadoop.fs.s3a.access.key=minioadmin
+            - --conf
+            - spark.hadoop.fs.s3a.secret.key=minioadmin
+            - --conf
+            - spark.hadoop.fs.s3a.path.style.access=true
+            - --conf
+            - spark.hadoop.fs.s3a.impl=org.apache.hadoop.fs.s3a.S3AFileSystem
+            - --conf
+            - spark.hadoop.fs.s3a.connection.ssl.enabled=false
+            - --class
+            - com.example.spark.SparkKafkaJob
+            - /opt/app/spark-job.jar
+          env:
+            - name: SCHEMA_REGISTRY_URL
+              value: http://schema-registry:8081
+            - name: KAFKA_TOPIC
+              value: platform-events
+            - name: KAFKA_VALUE_SUBJECT
+              value: platform-events-value
+          volumeMounts:
+            - name: spark-checkpoints
+              mountPath: /opt/app/checkpoints
+      volumes:
+        - name: spark-checkpoints
+          persistentVolumeClaim:
+            claimName: spark-checkpoints
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: spark-job
+spec:
+  type: {{ .Values.service.type }}
+  selector:
+    app: spark-job
+  ports:
+    - name: driver-rpc
+      port: 7078
+      targetPort: 7078
+    - name: blockmanager
+      port: 7079
+      targetPort: 7079
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: kafka-ui
+spec:
+  type: {{ .Values.service.type }}
+  selector:
+    app: kafka-ui
+  ports:
+    - name: http
+      port: 8080
+      targetPort: 8080
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kafka-ui
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: kafka-ui
+  template:
+    metadata:
+      labels:
+        app: kafka-ui
+    spec:
+      containers:
+        - name: kafka-ui
+          image: {{ .Values.images.kafkaUi }}
+          imagePullPolicy: {{ .Values.imagePullPolicy }}
+          env:
+            - name: KAFKA_CLUSTERS_0_NAME
+              value: local
+            - name: KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS
+              value: kafka:9092
+            - name: KAFKA_CLUSTERS_0_ZOOKEEPER
+              value: zookeeper:2181
+            - name: KAFKA_CLUSTERS_0_SCHEMAREGISTRY
+              value: http://schema-registry:8081
+          ports:
+            - containerPort: 8080
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: kafka-exporter
+spec:
+  type: {{ .Values.service.type }}
+  selector:
+    app: kafka-exporter
+  ports:
+    - name: metrics
+      port: 9308
+      targetPort: 9308
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kafka-exporter
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: kafka-exporter
+  template:
+    metadata:
+      labels:
+        app: kafka-exporter
+    spec:
+      containers:
+        - name: kafka-exporter
+          image: {{ .Values.images.kafkaExporter }}
+          imagePullPolicy: {{ .Values.imagePullPolicy }}
+          args:
+            - --kafka.server=kafka:9092
+          ports:
+            - containerPort: 9308

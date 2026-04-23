@@ -1,0 +1,27 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: data-platform-alloy
+  namespace: argocd
+spec:
+  project: data-platform
+  sources:
+  - repoURL: https://grafana.github.io/helm-charts
+    chart: alloy
+    targetRevision: 0.12.5
+    helm:
+      releaseName: alloy
+      valueFiles:
+      - $values/k8s/values-alloy-k8s.yaml
+  - repoURL: https://github.com/LOCAL/REPLACE-ME.git
+    targetRevision: HEAD
+    ref: values
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: monitoring
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+    - CreateNamespace=true

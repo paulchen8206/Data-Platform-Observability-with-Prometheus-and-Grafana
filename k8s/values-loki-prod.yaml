@@ -1,0 +1,34 @@
+loki:
+  useTestSchema: true
+  commonConfig:
+    replication_factor: 1
+  storage:
+    type: filesystem
+    bucketNames:
+      chunks: chunks
+      ruler: ruler
+      admin: admin
+singleBinary:
+  replicas: 1
+backend:
+  replicas: 0
+read:
+  replicas: 0
+write:
+  replicas: 0
+deploymentMode: SingleBinary
+gateway:
+  enabled: false
+chunksCache:
+  enabled: false
+resultsCache:
+  enabled: false
+lokiCanary:
+  enabled: false
+test:
+  enabled: false
+monitoring:
+  selfMonitoring:
+    enabled: false
+  dashboards:
+    enabled: false

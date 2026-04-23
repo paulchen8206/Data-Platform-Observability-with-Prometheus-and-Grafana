@@ -1,0 +1,45 @@
+# Production-like defaults for Grafana official Helm chart.
+# Chart: grafana/grafana
+
+replicas: 2
+resources:
+  requests:
+    cpu: 250m
+    memory: 512Mi
+  limits:
+    cpu: 1000m
+    memory: 1Gi
+persistence:
+  enabled: true
+  type: pvc
+  accessModes:
+  - ReadWriteOnce
+  size: 10Gi
+# Do not use default admin credentials in production.
+# Create secret first:
+# kubectl -n monitoring create secret generic grafana-admin \
+#   --from-literal=admin-user=<user> --from-literal=admin-password=<password>
+admin:
+  existingSecret: grafana-admin
+  userKey: admin-user
+  passwordKey: admin-password
+# Basic ingress template. Update host/tls for your environment.
+ingress:
+  enabled: true
+  ingressClassName: nginx
+  hosts:
+  - grafana.local
+  path: /
+  pathType: Prefix
+rbac:
+  create: true
+serviceAccount:
+  create: true
+
+# Optional: for true HA, use external DB (e.g., PostgreSQL) instead of sqlite.
+# env:
+#   GF_DATABASE_TYPE: postgres
+#   GF_DATABASE_HOST: postgres.monitoring.svc.cluster.local:5432
+#   GF_DATABASE_NAME: grafana
+#   GF_DATABASE_USER: grafana
+# envFromSecret: grafana-postgres
