@@ -1,0 +1,15 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: monitoring
+resources:
+- prometheus-rules.yaml
+configMapGenerator:
+- name: data-platform-grafana-dashboards
+  files:
+  - data-platform-overview.json=grafana-dashboard-data-platform-overview.json
+generatorOptions:
+  disableNameSuffixHash: true
+  labels:
+    grafana_dashboard: "1"
+  annotations:
+    grafana_folder: Data Platform

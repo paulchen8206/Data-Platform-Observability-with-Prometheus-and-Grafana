@@ -4,6 +4,27 @@
 grafana:
   enabled: true
   replicas: 2
+  sidecar:
+    dashboards:
+      enabled: true
+      label: grafana_dashboard
+      folderAnnotation: grafana_folder
+      searchNamespace: monitoring
+  additionalDataSources:
+  - name: Loki
+    uid: loki
+    type: loki
+    access: proxy
+    url: http://loki.monitoring.svc.cluster.local:3100
+    editable: false
+  - name: Alertmanager
+    uid: alertmanager
+    type: alertmanager
+    access: proxy
+    url: http://kube-prometheus-stack-alertmanager.monitoring.svc.cluster.local:9093
+    editable: false
+    jsonData:
+      implementation: prometheus
   persistence:
     enabled: true
     type: pvc

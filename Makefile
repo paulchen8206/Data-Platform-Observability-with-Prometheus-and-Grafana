@@ -379,6 +379,7 @@ k8s-up-helm-local: k8s-bootstrap-local
 		--namespace $(K8S_NAMESPACE) \
 		--version $(ALLOY_CHART_VERSION) \
 		-f k8s/values-alloy-k8s.yaml
+	$(KUBECTL) apply -k k8s/observability
 	@echo "=== Kubernetes pods ==="
 	$(KUBECTL) get pods -n $(K8S_NAMESPACE)
 	$(KUBECTL) get pods -n data-platform
