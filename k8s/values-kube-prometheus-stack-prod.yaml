@@ -31,6 +31,15 @@ grafana:
     accessModes:
     - ReadWriteOnce
     size: 10Gi
+  initChownData:
+    enabled: false
+  podSecurityContext:
+    fsGroup: 472
+    fsGroupChangePolicy: OnRootMismatch
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 472
+    runAsGroup: 472
   resources:
     requests:
       cpu: 250m
