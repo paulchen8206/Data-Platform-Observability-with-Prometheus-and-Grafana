@@ -608,7 +608,7 @@
       "targets": [
         {
           "editorMode": "code",
-          "expr": "sum(increase(loki_write_batch_retries_total[5m]))",
+          "expr": "sum(increase(loki_write_batch_retries_total[5m])) or vector(0)",
           "legendFormat": "retries",
           "range": true,
           "refId": "A"
