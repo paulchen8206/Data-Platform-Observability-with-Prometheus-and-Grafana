@@ -1,88 +1,99 @@
-# Data Platform (Local Docker Compose)
+# Data Platform Observability with Prometheus and Grafana
 
-Local end-to-end data platform for development and observability.
+A reference project for operating a small event-driven data platform together with a complete observability stack.
 
-- Producer writes Avro events to Kafka.
-- Spark Structured Streaming reads from Kafka and writes to Iceberg on MinIO.
-- Prometheus and Grafana provide metrics dashboards and alerting.
-- Alloy ships Docker logs to Loki.
+## What this repository contains
 
-## Table Of Contents
+- Data pipeline: `source-ingestion` -> Kafka -> `spark-extraction` -> Iceberg on MinIO.
+- Metrics and alerting: Prometheus, Alertmanager, exporters.
+- Logs and alerting: Alloy -> Loki (+ Loki rules).
+- Visualization: Grafana dashboards and Explore.
+- Deployment modes: Docker routine, Kubernetes Helm routine, Kubernetes Argo CD routine.
 
-- [Quick Start](#quick-start)
-- [Developer Commands](#developer-commands)
-- [Documentation](#documentation)
-- [Kubernetes Production Option](#kubernetes-production-option)
-- [Kubernetes In Docker With Argo CD](#kubernetes-in-docker-with-argo-cd)
-- [Notes](#notes)
+## Quick start by routine
 
-## Quick Start
+### Docker routine
 
 ```bash
-make up
-make ps
+make routine-up-docker
+make routine-status-docker
 ```
-
-Open:
-
-- Grafana: <http://localhost:3000>
-- Prometheus: <http://localhost:9090>
-- Loki: <http://localhost:3100>
-- Alloy UI/metrics: <http://localhost:12345>
-- Kafka UI: <http://localhost:8085>
-- Spark Master UI: <http://localhost:8080>
 
 Stop:
 
 ```bash
-make down
+make routine-down-docker
 ```
 
-## Developer Commands
+### Kubernetes routine (Helm)
 
 ```bash
-make help
+make routine-up-helm
+make routine-status-helm
 ```
 
-Most used:
+Stop:
 
-- `make up-core`
-- `make up-monitoring`
-- `make logs-spark`
-- `make logs-producer`
-- `make logs-alloy`
-- `make health`
-- `make verify-iceberg`
+```bash
+make routine-down-helm
+```
 
-## Documentation
+### Kubernetes routine (Argo CD)
 
-- Architecture: [docs/architecture.md](docs/architecture.md)
-- Runbook: [docs/runbook.md](docs/runbook.md)
-- Kubernetes production option: [docs/kubernetes-production.md](docs/kubernetes-production.md)
-- kind + Argo CD deployment: [docs/k8s-argocd-local.md](docs/k8s-argocd-local.md)
+```bash
+make routine-up-argocd
+make routine-status-argocd
+```
 
-## Kubernetes Production Option
+Stop:
 
-Production-like local Kubernetes deployment is available via Helm:
+```bash
+make routine-down-argocd
+```
 
-- Option A: official Grafana chart (`grafana/grafana`)
-- Option B: full monitoring stack (`prometheus-community/kube-prometheus-stack`)
+### Compatibility wrappers
 
-See [docs/kubernetes-production.md](docs/kubernetes-production.md) for production guidance on PVCs, HA replicas, resource limits, GitOps, security, ingress, and external database recommendations.
+If you prefer the old interface:
 
-## Kubernetes In Docker With Argo CD
+```bash
+make routine-up ROUTINE=docker
+make routine-status ROUTINE=helm
+make routine-down ROUTINE=argocd
+```
 
-Use Helm + Argo CD to deploy the local stack into kind with GitOps sync.
+## Primary local endpoints
 
-Entry points:
+### Docker routine endpoints
 
-- `make k8s-preflight`
-- `make k8s-argocd-install`
-- `make k8s-argocd-bootstrap`
+- Grafana: <http://localhost:3000>
+- Prometheus: <http://localhost:9090>
+- Alertmanager: <http://localhost:9093>
+- Loki: <http://localhost:3100>
+- Kafka UI: <http://localhost:8085>
+- Spark Master UI: <http://localhost:8080>
+- MinIO Console: <http://localhost:9001>
 
-Full steps are in [docs/k8s-argocd-local.md](docs/k8s-argocd-local.md).
+### Kubernetes routine endpoints
+
+Use `kubectl port-forward` from the appropriate namespace. Operational examples are in docs.
+
+## Documentation map
+
+- Architecture and design model: [docs/architecture.md](docs/architecture.md)
+- Local Kubernetes + Helm/Argo CD operations: [docs/local-kubernetes-argocd.md](docs/local-kubernetes-argocd.md)
+- Production Kubernetes blueprint: [docs/production-kubernetes.md](docs/production-kubernetes.md)
+- Day-2 runbook and incident playbooks: [docs/operations-runbook.md](docs/operations-runbook.md)
+
+## Repository layout
+
+- `docker-compose.yml`: local service topology.
+- `Makefile`: routines and lifecycle commands.
+- `k8s/`: Helm values and local deployment assets.
+- `argocd/`: Argo CD app definitions.
+- `observability/`: ServiceMonitors, rules, dashboard manifests.
+- `prometheus/`, `loki/`, `grafana/`, `alloy/`: observability configs.
 
 ## Notes
 
-- This project uses Alloy (not Promtail) for local log collection.
-- Default local credentials are kept in compose and provisioning files for development convenience only.
+- For local reproducibility, Grafana provisioning and SQLite repair logic are codified in `k8s/values-kube-prometheus-stack-prod.yaml`.
+- Avoid mixed ownership of the same Kubernetes resources between Helm and Argo CD.

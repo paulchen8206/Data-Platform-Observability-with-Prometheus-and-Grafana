@@ -5,7 +5,7 @@ images:
   minio: minio/minio:RELEASE.2024-10-29T16-01-48Z
   minioMc: minio/mc:RELEASE.2025-04-16T18-13-26Z
   sparkRuntime: data-platform-grafana-prometheus-spark-runtime:latest
-  sparkJob: data-platform-grafana-prometheus-spark-job:latest
+  sparkJob: data-platform-grafana-prometheus-spark-extraction:latest
   producer: data-platform-grafana-prometheus-producer:latest
   kafkaUi: provectuslabs/kafka-ui:v0.7.2
   kafkaExporter: danielqsj/kafka-exporter:v1.7.0

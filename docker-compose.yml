@@ -64,7 +64,7 @@ services:
 
   spark-master:
     build:
-      context: ./spark-job
+      context: ./spark-extraction
       dockerfile: Dockerfile
       target: spark-runtime
     image: data-platform-grafana-prometheus-spark-runtime
@@ -102,7 +102,7 @@ services:
 
   producer:
     build:
-      context: ./producer-app
+      context: ./source-ingestion
     container_name: producer
     depends_on:
       kafka-init:
@@ -115,10 +115,10 @@ services:
       KAFKA_TOPIC: platform-events
       SCHEMA_REGISTRY_URL: http://schema-registry:8081
 
-  spark-job:
+  spark-extraction:
     build:
-      context: ./spark-job
-    container_name: spark-job
+      context: ./spark-extraction
+    container_name: spark-extraction
     depends_on:
       kafka-init:
         condition: service_completed_successfully
@@ -154,9 +154,9 @@ services:
       - spark.hadoop.fs.s3a.connection.ssl.enabled=false
       - --class
       - com.example.spark.SparkKafkaJob
-      - /opt/app/spark-job.jar
+      - /opt/app/spark-extraction.jar
     volumes:
-      - ./spark-job/checkpoints:/opt/app/checkpoints
+      - ./spark-extraction/checkpoints:/opt/app/checkpoints
     restart: on-failure
     environment:
       SCHEMA_REGISTRY_URL: http://schema-registry:8081
@@ -165,7 +165,7 @@ services:
 
   iceberg-reader:
     build:
-      context: ./spark-job
+      context: ./spark-extraction
     container_name: iceberg-reader
     profiles:
       - verify

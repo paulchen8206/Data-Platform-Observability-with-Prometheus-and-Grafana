@@ -12,11 +12,17 @@ GRAFANA_ADMIN_USER ?= admin
 GRAFANA_ADMIN_PASSWORD ?= admin
 ALLOY_CHART_VERSION ?= 1.7.0
 ROUTINE ?= docker
+ROUTINES := docker helm argocd
 
-CORE_SERVICES := zookeeper kafka kafka-init schema-registry minio minio-init spark-master spark-worker producer spark-job kafka-ui
+CORE_SERVICES := zookeeper kafka kafka-init schema-registry minio minio-init spark-master spark-worker producer spark-extraction kafka-ui
 MONITORING_SERVICES := prometheus alertmanager grafana loki alloy kafka-exporter cadvisor node-exporter
 
-.PHONY: help routine-up routine-down routine-status up build up-core up-monitoring down down-v restart ps \
+.PHONY: help routine-list validate-routine \
+	routine-up routine-down routine-status \
+	routine-up-docker routine-up-helm routine-up-argocd \
+	routine-down-docker routine-down-helm routine-down-argocd \
+	routine-status-docker routine-status-helm routine-status-argocd \
+	up build up-core up-monitoring down down-v restart ps \
 	logs logs-producer logs-spark logs-alloy logs-prometheus logs-loki logs-cadvisor \
 	verify-iceberg verify-warehouse-k8s rules-prometheus rules-loki check-loki check-kafka-alert-series health \
 	kafka-topics kafka-consumer-groups spark-rebuild reset-checkpoints monitoring-recreate \
@@ -28,16 +34,28 @@ MONITORING_SERVICES := prometheus alertmanager grafana loki alloy kafka-exporter
 help:
 	@echo "Local Development (Docker Compose)"
 	@echo ""
-	@echo "Unified routines"
-	@echo "  make routine-up ROUTINE=docker  Start local Docker Compose stack"
-	@echo "  make routine-up ROUTINE=helm    Start Minikube + Helm flow"
-	@echo "  make routine-up ROUTINE=argocd  Start Minikube + Argo CD flow"
-	@echo "  make routine-down ROUTINE=docker Stop Docker Compose stack"
-	@echo "  make routine-down ROUTINE=helm   Stop Minikube profile"
-	@echo "  make routine-down ROUTINE=argocd Stop Minikube profile"
-	@echo "  make routine-status ROUTINE=docker Show Docker Compose health"
-	@echo "  make routine-status ROUTINE=helm   Show Kubernetes health on Minikube"
-	@echo "  make routine-status ROUTINE=argocd Show Kubernetes + Argo CD health on Minikube"
+	@echo "Docker Routine"
+	@echo "  make routine-up-docker      Start local Docker Compose stack"
+	@echo "  make routine-status-docker  Show Docker Compose health"
+	@echo "  make routine-down-docker    Stop Docker Compose stack"
+	@echo "  Quickstart: make routine-up-docker && make routine-status-docker"
+	@echo ""
+	@echo "Kubernetes Routine (Helm)"
+	@echo "  make routine-up-helm        Start Minikube + Helm flow"
+	@echo "  make routine-status-helm    Show Kubernetes health on Minikube"
+	@echo "  make routine-down-helm      Stop Minikube profile"
+	@echo "  Quickstart: make routine-up-helm && make routine-status-helm"
+	@echo ""
+	@echo "Kubernetes Routine (Argo CD)"
+	@echo "  make routine-up-argocd      Start Minikube + Argo CD flow"
+	@echo "  make routine-status-argocd  Show Kubernetes + Argo CD health on Minikube"
+	@echo "  make routine-down-argocd    Stop Minikube profile"
+	@echo "  Quickstart: make routine-up-argocd && make routine-status-argocd"
+	@echo ""
+	@echo "Compatibility wrappers"
+	@echo "  make routine-up ROUTINE=<docker|helm|argocd>"
+	@echo "  make routine-down ROUTINE=<docker|helm|argocd>"
+	@echo "  make routine-status ROUTINE=<docker|helm|argocd>"
 	@echo ""
 	@echo "Lifecycle"
 	@echo "  make up                Build and start all services"
@@ -52,7 +70,7 @@ help:
 	@echo "Logs"
 	@echo "  make logs              Tail all service logs"
 	@echo "  make logs-producer     Tail producer logs"
-	@echo "  make logs-spark        Tail spark-job logs"
+	@echo "  make logs-spark        Tail spark-extraction logs"
 	@echo "  make logs-alloy        Tail Alloy logs"
 	@echo "  make logs-prometheus   Tail Prometheus logs"
 	@echo "  make logs-loki         Tail Loki logs"
@@ -70,7 +88,7 @@ help:
 	@echo "  make kafka-consumer-groups     List Kafka consumer groups"
 	@echo ""
 	@echo "Maintenance"
-	@echo "  make spark-rebuild      Rebuild and restart spark-job"
+	@echo "  make spark-rebuild      Rebuild and restart spark-extraction"
 	@echo "  make reset-checkpoints  Remove Spark checkpoints except .gitkeep"
 	@echo "  make monitoring-recreate Recreate monitoring/logging services"
 	@echo ""
@@ -90,60 +108,61 @@ help:
 	@echo "  make k8s-argocd-bootstrap Apply Argo CD app-of-apps"
 	@echo "  make k8s-argocd-password Show Argo CD admin initial password"
 
-routine-up:
-	@if [ "$(ROUTINE)" = "docker" ]; then \
-		$(MAKE) up; \
-	elif [ "$(ROUTINE)" = "helm" ]; then \
-		$(MAKE) k8s-up-helm-local; \
-	elif [ "$(ROUTINE)" = "argocd" ]; then \
-		$(MAKE) k8s-up-argocd-local; \
-	else \
-		echo "ERROR: ROUTINE must be one of: docker, helm, argocd"; \
+routine-list:
+	@echo "Supported routines: $(ROUTINES)"
+
+validate-routine:
+	@if ! echo "$(ROUTINES)" | tr ' ' '\n' | grep -qx "$(ROUTINE)"; then \
+		echo "ERROR: ROUTINE must be one of: $(ROUTINES)"; \
 		exit 1; \
 	fi
 
-routine-down:
-	@if [ "$(ROUTINE)" = "docker" ]; then \
-		$(MAKE) down; \
-	elif [ "$(ROUTINE)" = "helm" ] || [ "$(ROUTINE)" = "argocd" ]; then \
-		minikube stop -p $(MINIKUBE_PROFILE); \
-	else \
-		echo "ERROR: ROUTINE must be one of: docker, helm, argocd"; \
-		exit 1; \
-	fi
+routine-up: validate-routine routine-up-$(ROUTINE)
 
-routine-status:
-	@if [ "$(ROUTINE)" = "docker" ]; then \
-		echo "=== Docker Compose health ==="; \
-		$(COMPOSE) ps; \
-		echo; \
-		echo "=== Prometheus up targets (docker) ==="; \
-		curl -sf http://localhost:9090/api/v1/targets >/dev/null && echo "Prometheus API reachable" || echo "Prometheus API not reachable"; \
-	elif [ "$(ROUTINE)" = "helm" ] || [ "$(ROUTINE)" = "argocd" ]; then \
-		echo "=== Kubernetes health (profile: $(MINIKUBE_PROFILE)) ==="; \
-		ctx=`$(KUBECTL) config current-context 2>/dev/null`; \
-		if [ -z "$$ctx" ]; then \
-			echo "Kubernetes context: not set"; \
-			echo "Hint: run 'kubectl config use-context $(MINIKUBE_PROFILE)'"; \
-			exit 1; \
-		fi; \
-		echo "Kubernetes context: $$ctx"; \
-		$(KUBECTL) cluster-info >/dev/null && echo "Kubernetes API reachable" || { echo "Kubernetes API not reachable"; exit 1; }; \
-		echo; \
-		echo "=== monitoring namespace pods ==="; \
-		$(KUBECTL) get pods -n $(K8S_NAMESPACE); \
-		echo; \
-		echo "=== data-platform namespace pods ==="; \
-		$(KUBECTL) get pods -n data-platform; \
-		if [ "$(ROUTINE)" = "argocd" ]; then \
-			echo; \
-			echo "=== argocd namespace pods ==="; \
-			$(KUBECTL) get pods -n $(ARGOCD_NAMESPACE); \
-		fi; \
-	else \
-		echo "ERROR: ROUTINE must be one of: docker, helm, argocd"; \
+routine-down: validate-routine routine-down-$(ROUTINE)
+
+routine-status: validate-routine routine-status-$(ROUTINE)
+
+routine-up-docker: up
+
+routine-up-helm: k8s-up-helm-local
+
+routine-up-argocd: k8s-up-argocd-local
+
+routine-down-docker: down
+
+routine-down-helm: k8s-minikube-stop
+
+routine-down-argocd: k8s-minikube-stop
+
+routine-status-docker:
+	@echo "=== Docker Compose health ==="
+	@$(COMPOSE) ps
+	@echo
+	@echo "=== Prometheus up targets (docker) ==="
+	@curl -sf http://localhost:9090/api/v1/targets >/dev/null && echo "Prometheus API reachable" || echo "Prometheus API not reachable"
+
+routine-status-helm:
+	@echo "=== Kubernetes health (profile: $(MINIKUBE_PROFILE)) ==="
+	@ctx=`$(KUBECTL) config current-context 2>/dev/null`; \
+	if [ -z "$$ctx" ]; then \
+		echo "Kubernetes context: not set"; \
+		echo "Hint: run 'kubectl config use-context $(MINIKUBE_PROFILE)'"; \
 		exit 1; \
-	fi
+	fi; \
+	echo "Kubernetes context: $$ctx"
+	@$(KUBECTL) cluster-info >/dev/null && echo "Kubernetes API reachable" || { echo "Kubernetes API not reachable"; exit 1; }
+	@echo
+	@echo "=== monitoring namespace pods ==="
+	@$(KUBECTL) get pods -n $(K8S_NAMESPACE)
+	@echo
+	@echo "=== data-platform namespace pods ==="
+	@$(KUBECTL) get pods -n data-platform
+
+routine-status-argocd: routine-status-helm
+	@echo
+	@echo "=== argocd namespace pods ==="
+	@$(KUBECTL) get pods -n $(ARGOCD_NAMESPACE)
 
 up:
 	$(COMPOSE) up -d --build
@@ -176,7 +195,7 @@ logs-producer:
 	$(COMPOSE) logs -f producer
 
 logs-spark:
-	$(COMPOSE) logs -f spark-job
+	$(COMPOSE) logs -f spark-extraction
 
 logs-alloy:
 	$(COMPOSE) logs -f alloy
@@ -264,10 +283,10 @@ kafka-consumer-groups:
 	$(COMPOSE) exec -T kafka kafka-consumer-groups --bootstrap-server kafka:9092 --list
 
 spark-rebuild:
-	$(COMPOSE) up -d --build spark-job
+	$(COMPOSE) up -d --build spark-extraction
 
 reset-checkpoints:
-	find spark-job/checkpoints -mindepth 1 ! -name '.gitkeep' -exec rm -rf {} +
+	find spark-extraction/checkpoints -mindepth 1 ! -name '.gitkeep' -exec rm -rf {} +
 
 monitoring-recreate:
 	$(COMPOSE) up -d --force-recreate cadvisor prometheus grafana loki alloy
@@ -350,12 +369,16 @@ k8s-minikube-start:
 	minikube start -p $(MINIKUBE_PROFILE) --driver=$(MINIKUBE_DRIVER)
 	$(KUBECTL) config use-context $(MINIKUBE_PROFILE)
 
+k8s-minikube-stop:
+	@echo "=== Stopping minikube profile '$(MINIKUBE_PROFILE)' ==="
+	minikube stop -p $(MINIKUBE_PROFILE)
+
 k8s-build-images:
 	@echo "=== Building local images in minikube Docker ==="
 	@eval $$(minikube -p $(MINIKUBE_PROFILE) docker-env) && \
-		docker build -t data-platform-grafana-prometheus-producer:latest ./producer-app && \
-		docker build --target spark-runtime -t data-platform-grafana-prometheus-spark-runtime:latest ./spark-job && \
-		docker build -t data-platform-grafana-prometheus-spark-job:latest ./spark-job
+		docker build -t data-platform-grafana-prometheus-producer:latest ./source-ingestion && \
+		docker build --target spark-runtime -t data-platform-grafana-prometheus-spark-runtime:latest ./spark-extraction && \
+		docker build -t data-platform-grafana-prometheus-spark-extraction:latest ./spark-extraction
 
 k8s-local-prepare:
 	@echo "=== Preparing namespaces and required secret ==="

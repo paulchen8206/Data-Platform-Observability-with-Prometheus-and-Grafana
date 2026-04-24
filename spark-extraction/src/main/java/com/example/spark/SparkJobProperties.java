@@ -9,7 +9,7 @@ import org.springframework.util.StringUtils;
 
 @Component
 @Validated
-@ConfigurationProperties(prefix = "app.spark-job")
+@ConfigurationProperties(prefix = "app.spark-extraction")
 public class SparkJobProperties {
   @NotBlank
   private String schemaRegistryUrl;
@@ -65,19 +65,19 @@ public class SparkJobProperties {
   @PostConstruct
   void validateFailFast() {
     if (!StringUtils.hasText(schemaRegistryUrl)) {
-      throw new IllegalStateException("Invalid config: app.spark-job.schema-registry-url must not be blank");
+      throw new IllegalStateException("Invalid config: app.spark-extraction.schema-registry-url must not be blank");
     }
     if (!StringUtils.hasText(schemaSubject)) {
-      throw new IllegalStateException("Invalid config: app.spark-job.schema-subject must not be blank");
+      throw new IllegalStateException("Invalid config: app.spark-extraction.schema-subject must not be blank");
     }
     if (!StringUtils.hasText(kafkaBootstrapServers)) {
-      throw new IllegalStateException("Invalid config: app.spark-job.kafka-bootstrap-servers must not be blank");
+      throw new IllegalStateException("Invalid config: app.spark-extraction.kafka-bootstrap-servers must not be blank");
     }
     if (!StringUtils.hasText(kafkaTopic)) {
-      throw new IllegalStateException("Invalid config: app.spark-job.kafka-topic must not be blank");
+      throw new IllegalStateException("Invalid config: app.spark-extraction.kafka-topic must not be blank");
     }
     if (!StringUtils.hasText(checkpointLocation)) {
-      throw new IllegalStateException("Invalid config: app.spark-job.checkpoint-location must not be blank");
+      throw new IllegalStateException("Invalid config: app.spark-extraction.checkpoint-location must not be blank");
     }
   }
 }

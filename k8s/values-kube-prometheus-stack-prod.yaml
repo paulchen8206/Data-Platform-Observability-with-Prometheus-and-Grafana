@@ -3,13 +3,75 @@
 
 grafana:
   enabled: true
-  replicas: 2
+  replicas: 1
+  deploymentStrategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 0
+      maxUnavailable: 1
+  image:
+    tag: 11.5.2
+  extraInitContainers:
+  - name: grafana-db-data-keys-repair
+    image: keinos/sqlite3:3.46.1
+    imagePullPolicy: IfNotPresent
+    command:
+    - /bin/sh
+    - -ec
+    - |
+      DB=/var/lib/grafana/grafana.db
+      if [ ! -f "$DB" ]; then
+        exit 0
+      fi
+
+      TABLE_EXISTS=$(sqlite3 "$DB" "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='data_keys';")
+      if [ "$TABLE_EXISTS" != "1" ]; then
+        exit 0
+      fi
+
+      HAS_DEFAULT=$(sqlite3 "$DB" "SELECT CASE WHEN dflt_value IS NULL THEN 0 ELSE 1 END FROM pragma_table_info('data_keys') WHERE name='id';")
+      if [ -z "$HAS_DEFAULT" ] || [ "$HAS_DEFAULT" = "1" ]; then
+        exit 0
+      fi
+
+      sqlite3 "$DB" "BEGIN;
+      ALTER TABLE data_keys RENAME TO data_keys_old;
+      CREATE TABLE data_keys (
+        id TEXT PRIMARY KEY NOT NULL DEFAULT (lower(hex(randomblob(16)))),
+        active INTEGER NOT NULL,
+        scope TEXT NOT NULL,
+        provider TEXT NOT NULL,
+        encrypted_data BLOB NOT NULL,
+        created DATETIME NOT NULL,
+        updated DATETIME NOT NULL,
+        label TEXT NOT NULL DEFAULT '',
+        name TEXT NOT NULL DEFAULT ''
+      );
+      INSERT INTO data_keys(id,active,scope,provider,encrypted_data,created,updated,label,name)
+      SELECT id,active,scope,provider,encrypted_data,created,updated,label,name FROM data_keys_old;
+      DROP TABLE data_keys_old;
+      COMMIT;"
+
+      chown 472:472 "$DB"
+      chmod 640 "$DB"
+    volumeMounts:
+    - name: storage
+      mountPath: /var/lib/grafana
   sidecar:
     dashboards:
       enabled: true
       label: grafana_dashboard
       folderAnnotation: grafana_folder
       searchNamespace: monitoring
+    datasources:
+      enabled: true
+      defaultDatasourceEnabled: true
+      isDefaultDatasource: true
+      alertmanager:
+        enabled: true
+        name: Alertmanager
+        uid: alertmanager
+        implementation: prometheus
   additionalDataSources:
   - name: Loki
     uid: loki
@@ -17,14 +79,10 @@ grafana:
     access: proxy
     url: http://loki.monitoring.svc.cluster.local:3100
     editable: false
-  - name: Alertmanager
-    uid: alertmanager
-    type: alertmanager
-    access: proxy
-    url: http://kube-prometheus-stack-alertmanager.monitoring.svc.cluster.local:9093
-    editable: false
     jsonData:
-      implementation: prometheus
+      httpHeaderName1: X-Scope-OrgID
+    secureJsonData:
+      httpHeaderValue1: "1"
   persistence:
     enabled: true
     type: pvc

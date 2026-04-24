@@ -1,0 +1,22 @@
+groups:
+- name: spark-extraction-log-alerts
+  interval: 30s
+  rules:
+  - alert: SparkJobErrorOrExceptionLogs
+    expr: sum(count_over_time({service="spark-extraction"} |~ "(?i)(error|exception)" [2m])) > 0
+    for: 1m
+    labels:
+      severity: warning
+      service: spark-extraction
+    annotations:
+      summary: Spark job error or exception logs detected
+      description: spark-extraction emitted error or exception logs in the last 2 minutes.
+  - alert: SparkJobStackTraceCritical
+    expr: sum(count_over_time({service="spark-extraction"} |~ "(ERROR|Exception|Caused by:)" [5m])) > 0
+    for: 5m
+    labels:
+      severity: critical
+      service: spark-extraction
+    annotations:
+      summary: Spark job stack trace errors detected
+      description: spark-extraction emitted explicit stack-trace style logs (ERROR, Exception, or Caused by:) continuously over the last 5 minutes.

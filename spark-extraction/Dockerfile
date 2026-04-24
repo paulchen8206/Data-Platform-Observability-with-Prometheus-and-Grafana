@@ -44,6 +44,6 @@ USER spark
 
 FROM spark-runtime
 WORKDIR /opt/app
-COPY --from=build /workspace/target/spark-job-1.0.0.jar /opt/app/spark-job.jar
+COPY --from=build /workspace/target/spark-extraction-1.0.0.jar /opt/app/spark-extraction.jar
 COPY --from=build /workspace/runtime-jars /opt/spark/jars/
 COPY sql /opt/app/sql

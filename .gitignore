@@ -38,7 +38,7 @@ node_modules/
 .pnpm-store/
 
 # Runtime checkpoints/state
-spark-job/checkpoints/
+spark-extraction/checkpoints/
 
 # Docker/runtime local data
 prometheus_data/

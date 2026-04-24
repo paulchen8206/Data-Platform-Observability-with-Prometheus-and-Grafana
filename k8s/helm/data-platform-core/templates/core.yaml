@@ -370,19 +370,19 @@ spec:
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: spark-job
+  name: spark-extraction
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: spark-job
+      app: spark-extraction
   template:
     metadata:
       labels:
-        app: spark-job
+        app: spark-extraction
     spec:
       containers:
-        - name: spark-job
+        - name: spark-extraction
           image: {{ .Values.images.sparkJob }}
           imagePullPolicy: {{ .Values.imagePullPolicy }}
           ports:
@@ -393,7 +393,7 @@ spec:
             - --master
             - spark://spark-master:7077
             - --conf
-            - spark.driver.host=spark-job
+            - spark.driver.host=spark-extraction
             - --conf
             - spark.driver.bindAddress=0.0.0.0
             - --conf
@@ -430,7 +430,7 @@ spec:
             - spark.hadoop.fs.s3a.connection.ssl.enabled=false
             - --class
             - com.example.spark.SparkKafkaJob
-            - /opt/app/spark-job.jar
+            - /opt/app/spark-extraction.jar
           env:
             - name: SCHEMA_REGISTRY_URL
               value: http://schema-registry:8081
@@ -456,11 +456,11 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: spark-job
+  name: spark-extraction
 spec:
   type: {{ .Values.service.type }}
   selector:
-    app: spark-job
+    app: spark-extraction
   ports:
     - name: driver-rpc
       port: 7078
