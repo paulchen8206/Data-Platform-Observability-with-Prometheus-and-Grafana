@@ -151,6 +151,49 @@ kubectl -n argocd port-forward svc/argocd-server 18081:443
 make k8s-argocd-password
 ```
 
+### 4) data-platform-core is Progressing (spark-extraction crash loop)
+
+Typical symptom: `data-platform-core` is `Synced` but stays `Progressing`, and `spark-extraction` keeps restarting.
+
+1. Confirm the failing workload:
+
+```bash
+kubectl -n data-platform get deploy spark-extraction
+kubectl -n data-platform get pods -l app=spark-extraction
+```
+
+2. Confirm offset/checkpoint data-loss error in logs:
+
+```bash
+kubectl -n data-platform logs deploy/spark-extraction --tail=120
+```
+
+Look for `OffsetOutOfRangeException` / `Cannot fetch offset` messages.
+
+3. Clear stale Spark checkpoint state from `spark-checkpoints` PVC:
+
+```bash
+kubectl -n data-platform run ckpt-cleaner --image=busybox:1.36 --restart=Never \
+  --overrides='{"spec":{"containers":[{"name":"ckpt-cleaner","image":"busybox:1.36","command":["sh","-c","rm -rf /mnt/* && echo cleaned && sleep 2"],"volumeMounts":[{"name":"ckpt","mountPath":"/mnt"}]}],"volumes":[{"name":"ckpt","persistentVolumeClaim":{"claimName":"spark-checkpoints"}}]}}'
+kubectl -n data-platform wait --for=condition=Ready pod/ckpt-cleaner --timeout=60s || true
+kubectl -n data-platform logs ckpt-cleaner
+kubectl -n data-platform delete pod ckpt-cleaner --ignore-not-found
+```
+
+4. Restart and verify `spark-extraction`:
+
+```bash
+kubectl -n data-platform rollout restart deploy/spark-extraction
+kubectl -n data-platform rollout status deploy/spark-extraction --timeout=180s
+```
+
+5. Verify Argo CD app health recovers:
+
+```bash
+kubectl -n argocd get application data-platform-core \
+  -o jsonpath='Sync:{.status.sync.status}{"\n"}Health:{.status.health.status}{"\n"}Phase:{.status.operationState.phase}{"\n"}'
+```
+
 ## Recovery utilities
 
 ```bash
